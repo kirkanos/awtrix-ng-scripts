@@ -20,7 +20,10 @@ kept here for reference/backup and so it can be reinstalled or copied to another
   `/ICONS/claude.gif` so AWTRIX can reserve the icon column and auto-scroll the text next to it
   (a `draw`-command icon doesn't scroll — text drawn that way is static and gets clipped instead).
 - **`hooks-settings-snippet.json`** — the `hooks` block to merge into `~/.claude/settings.json`
-  (global, user-level — applies to every project).
+  (global, user-level — applies to every project). The `Notification` entry is restricted with
+  `"matcher": "permission_prompt|agent_needs_input"` — without it, Claude Code's periodic
+  `idle_prompt` reminder (sent while a finished session just sits unanswered) also fires the HELP
+  notification, which looks like a spurious second alert shortly after a DONE ping.
 
 ## Install on a (new) machine
 
