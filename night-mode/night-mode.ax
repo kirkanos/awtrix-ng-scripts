@@ -1,0 +1,76 @@
+# @name    Night Mode
+# @desc    Mutes sound and dims the panel during nightly quiet hours
+# @author  awtrix-ng-scripts
+# @version 1.0
+# @headless true
+# @config  start           text   "Night start (HH:MM)" default="22:00"
+# @config  end             text   "Night end (HH:MM)"   default="07:00"
+# @config  nightBrightness slider "Night brightness"     default=0 min=0 max=255
+
+class NightMode
+  var startH, startM, endH, endM, nightBrightness
+  var active
+  var prevBrightness, prevSound, prevAutoBrightness
+
+  def parse_time(s, dh, dm)
+    var m = re.search("([0-9]+):([0-9]+)", s)
+    if m == nil return [dh, dm] end
+    var h = num(m[1])
+    var mn = num(m[2])
+    if h == nil || mn == nil return [dh, dm] end
+    return [h, mn]
+  end
+
+  def init()
+    var st = self.parse_time(store.get("start"), 22, 0)
+    self.startH = st[0]
+    self.startM = st[1]
+    var et = self.parse_time(store.get("end"), 7, 0)
+    self.endH = et[0]
+    self.endM = et[1]
+    self.nightBrightness = store.get("nightBrightness")
+    self.active = store.get("active", false)
+    self.prevBrightness = store.get("prevBrightness")
+    self.prevSound = store.get("prevSound")
+    self.prevAutoBrightness = store.get("prevAutoBrightness")
+  end
+
+  def in_night(h, m)
+    var now = h * 60 + m
+    var from = self.startH * 60 + self.startM
+    var upto = self.endH * 60 + self.endM
+    if from == upto return false end
+    if from < upto
+      return now >= from && now < upto
+    end
+    return now >= from || now < upto
+  end
+
+  def loop()
+    if hour() < 0 return end
+    var night = self.in_night(hour(), minute())
+    if night && !self.active
+      self.prevBrightness = settings.get("brightness")
+      self.prevSound = settings.get("soundEnabled")
+      self.prevAutoBrightness = settings.get("autoBrightness")
+      store.set("prevBrightness", self.prevBrightness)
+      store.set("prevSound", self.prevSound)
+      store.set("prevAutoBrightness", self.prevAutoBrightness)
+      settings.set("autoBrightness", false)
+      settings.set("brightness", self.nightBrightness)
+      settings.set("soundEnabled", false)
+      self.active = true
+      store.set("active", true)
+      log("Night Mode: quiet hours started")
+    elif !night && self.active
+      settings.set("soundEnabled", self.prevSound == nil ? true : self.prevSound)
+      settings.set("brightness", self.prevBrightness == nil ? 120 : self.prevBrightness)
+      settings.set("autoBrightness", self.prevAutoBrightness == nil ? false : self.prevAutoBrightness)
+      self.active = false
+      store.set("active", false)
+      log("Night Mode: quiet hours ended")
+    end
+  end
+end
+
+return NightMode()
