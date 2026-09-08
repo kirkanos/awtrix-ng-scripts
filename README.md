@@ -5,3 +5,5 @@
 - [`claude-notify/`](claude-notify/) — global Claude Code hooks that flash a status notification
   (icon, project name, sound) on the panel when Claude finishes a task or needs input. See its
   README for setup.
+- [`urlaub/`](urlaub/) — Berry app: Countdown bis Urlaubsbeginn, danach verbleibende Urlaubstage,
+  mit animiertem Laptop- bzw. Strand-Icon. See its README for setup.

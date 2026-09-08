@@ -1,0 +1,130 @@
+# @name     Urlaubscountdown
+# @desc     Tage bis Urlaubsbeginn, danach verbleibende Urlaubstage
+# @author   kirkanos
+# @version  1.0
+# @config   start    text  "Urlaubsbeginn"     default="" help="Format: JJJJ-MM-TT"
+# @config   ende     text  "Urlaubsende"       default="" help="Format: JJJJ-MM-TT"
+# @config   vor      color "Farbe davor"       default=#3399FF
+# @config   waehrend color "Farbe im Urlaub"   default=#00CC44
+
+import string
+
+class Urlaub
+  var start_days, end_days, configured
+  var vor, waehrend
+  var today_days, label, tint, in_urlaub
+  var wave
+
+  def init()
+    self.wave = [0, 1, 1, 0]                     # Wellenmuster fuers Icon, einmal gebaut
+    self.vor = store.get("vor")
+    self.waehrend = store.get("waehrend")
+    self.tint = self.vor
+    self.configured = false
+    self.today_days = nil
+    self.label = nil
+    self.in_urlaub = false
+
+    var s = re.search("(\\d+)-(\\d+)-(\\d+)", store.get("start"))
+    var e = re.search("(\\d+)-(\\d+)-(\\d+)", store.get("ende"))
+    if s == nil return end
+    if e == nil return end
+    self.start_days = self.civil_days(self.parse_int(s[1]), self.parse_int(s[2]), self.parse_int(s[3]))
+    self.end_days = self.civil_days(self.parse_int(e[1]), self.parse_int(e[2]), self.parse_int(e[3]))
+    self.configured = true
+  end
+
+  # num() liest "09" als Oktalzahl und scheitert - deshalb Ziffern selbst umwandeln
+  def parse_int(s)
+    var n = 0
+    for i : 0 .. size(s) - 1
+      n = n * 10 + string.find("0123456789", s[i])
+    end
+    return n
+  end
+
+  # Tage seit 1970-01-01 aus Jahr/Monat/Tag (civil_from_days-Algorithmus)
+  def civil_days(y, m, d)
+    if m <= 2 y -= 1 end
+    var era = y / 400
+    var yoe = y - era * 400
+    var mm = m > 2 ? m - 3 : m + 9
+    var doy = (153 * mm + 2) / 5 + d - 1
+    var doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+    return era * 146097 + doe - 719468
+  end
+
+  def loop()
+    if !self.configured
+      return
+    end
+    if hour() < 0
+      return
+    end
+    self.today_days = self.civil_days(year(), month(), day())
+    if self.today_days < self.start_days
+      self.label = str(self.start_days - self.today_days) + "T"
+      self.tint = self.vor
+      self.in_urlaub = false
+    elif self.today_days <= self.end_days
+      self.label = str(self.end_days - self.today_days) + "T"
+      self.tint = self.waehrend
+      self.in_urlaub = true
+    end
+  end
+
+  def should_show()
+    if !self.configured
+      return false
+    end
+    if self.today_days == nil
+      return false
+    end
+    return self.today_days <= self.end_days
+  end
+
+  def draw()
+    clear()
+    if self.in_urlaub
+      self.draw_beach()
+    else
+      self.draw_laptop()
+    end
+    if self.label != nil
+      var avail = width() - 9
+      text(9 + (avail - text_ink_width(self.label)) / 2, 6, self.label, self.tint)
+    end
+  end
+
+  # Strandszene: Sonne, schwingende Palme, wandernde Wellen
+  def draw_beach()
+    var phase = (now_ms() / 200) % 4
+    var sway = self.wave[phase]                   # 0 oder 1, laesst die Palme leicht schwanken
+    for x : 0 .. 7
+      pixel(x, 7, 0x0B3D91)
+      pixel(x, 6 + self.wave[(x + phase) % 4], 0x2299FF)
+    end
+    circle_fill(6, 1, 1, 0xFFD400)                 # Sonne
+    pixel(2, 2, 0x8B5A2B)
+    pixel(2, 3, 0x8B5A2B)
+    pixel(3, 4, 0x8B5A2B)                          # Stamm
+    pixel(1 + sway, 0, 0x2E8B57)
+    pixel(3 + sway, 0, 0x2E8B57)
+    pixel(2 + sway, 1, 0x2E8B57)                   # Blaetter
+  end
+
+  # Arbeitender Laptop mit blinkendem Terminaltext
+  def draw_laptop()
+    rect_fill(0, 6, 8, 2, 0x555555)                # Tastatur/Basis
+    rect(1, 0, 6, 6, 0x333333)                      # Bildschirmrahmen
+    rect_fill(2, 1, 4, 4, 0x001830)                # Bildschirm
+    pixel(3, 4, 0x00FF66)
+    if (now_ms() / 500) % 2 == 0
+      pixel(3, 2, 0x00FF66)
+      pixel(4, 2, 0x00FF66)
+      pixel(3, 3, 0x00FF66)
+    end
+  end
+end
+
+return Urlaub()
