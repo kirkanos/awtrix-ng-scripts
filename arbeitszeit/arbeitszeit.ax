@@ -16,7 +16,7 @@ import string
 class Arbeitszeit
   var start_min, soll_min, total_min, max_min, configured
   var farbe, ueberzeit, icon_unter, icon_ueber, track
-  var netto, over_min, fanfare_done, last_reset_day
+  var netto, over_min, fanfare_done, last_reset_day, stopped, paused_at
   var h_str, mm_str, text_x, colon_x, mm_x
 
   def init()
@@ -34,6 +34,8 @@ class Arbeitszeit
     self.over_min = 0
     self.fanfare_done = false
     self.last_reset_day = -1
+    self.stopped = false
+    self.paused_at = nil
     self.h_str = nil
     self.mm_str = nil
 
@@ -64,6 +66,8 @@ class Arbeitszeit
       self.h_str = nil
       self.mm_str = nil
       self.fanfare_done = false
+      self.stopped = false
+      self.paused_at = nil
       return
     end
     if !self.configured
@@ -73,6 +77,9 @@ class Arbeitszeit
       self.over_min = 0
       self.set_time_strings("0", "00")
       return
+    end
+    if self.stopped
+      return                          # eingefroren, bis Mitternachts-Reset oder erneutes Einstempeln
     end
     var brutto = hour() * 60 + minute() - self.start_min
     if brutto < 0
@@ -113,13 +120,38 @@ class Arbeitszeit
 
   def on_button(btn)
     if btn == "select"
-      var hh = hour() < 10 ? "0" + str(hour()) : str(hour())
-      var mi = minute() < 10 ? "0" + str(minute()) : str(minute())
-      store.set("start", hh + ":" + mi)
-      self.start_min = hour() * 60 + minute()
-      self.configured = true
-      self.fanfare_done = false
+      if !self.configured
+        self.clock_in()
+      elif !self.stopped
+        self.stopped = true
+        self.paused_at = hour() * 60 + minute()      # ausstempeln: Zeit einfrieren
+      else
+        var pause_len = hour() * 60 + minute() - self.paused_at
+        if pause_len < 0
+          pause_len = 0
+        end
+        self.start_min += pause_len                  # Pause herausrechnen statt neu einzustempeln
+        self.save_start()
+        self.stopped = false
+      end
     end
+  end
+
+  def clock_in()
+    self.start_min = hour() * 60 + minute()
+    self.save_start()
+    self.configured = true
+    self.stopped = false
+    self.fanfare_done = false
+  end
+
+  # start_min als "SS:MM" zurueck in die Einstellungen schreiben
+  def save_start()
+    var hh = self.start_min / 60
+    var mi = self.start_min % 60
+    var hh_s = hh < 10 ? "0" + str(hh) : str(hh)
+    var mi_s = mi < 10 ? "0" + str(mi) : str(mi)
+    store.set("start", hh_s + ":" + mi_s)
   end
 
   def should_show()

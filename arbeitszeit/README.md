@@ -12,7 +12,13 @@ zusätzliche Felder in der Überstunden-Farbe angehängt.
 Der Arbeitsbeginn lässt sich entweder in den Einstellungen eintragen oder per Knopfdruck setzen:
 solange kein Arbeitsbeginn gesetzt ist, erscheint die App ab 8 Uhr morgens als Erinnerung mit der
 Anzeige `0:00`. Ein Druck auf den mittleren Knopf (select) am Panel übernimmt dann die aktuelle
-Uhrzeit als Arbeitsbeginn — die Zeiterfassung startet sofort.
+Uhrzeit als Arbeitsbeginn — die Zeiterfassung startet sofort ("einstempeln").
+
+Ein erneuter Druck auf den Knopf, während die Zeiterfassung läuft, pausiert sie ("ausstempeln"): die
+angezeigte Zeit friert an Ort und Stelle ein — die App bleibt dabei weiter in der Rotation sichtbar,
+zählt aber nicht mehr weiter. Ein dritter Druck setzt die Zeiterfassung fort ("weiter"): die
+Pausendauer wird herausgerechnet, die Anzeige macht also genau dort weiter, wo sie eingefroren war,
+statt bei 0 neu zu beginnen. Beliebig oft wiederholbar (z. B. für die Mittagspause).
 
 Bei Erreichen der maximalen Arbeitszeit ertönt einmalig eine Fanfare samt Benachrichtigung
 "Feierabend!". Nachts um 0 Uhr wird der Arbeitsbeginn automatisch zurückgesetzt (leer), damit am
@@ -52,9 +58,8 @@ curl -sX PUT "http://$AWTRIX/api/v1/apps/script/arbeitszeit" \
 | Maximale Arbeitszeit | Ab dieser geleisteten Zeit ertönt einmalig die Fanfare | `10` h |
 
 Solange kein Arbeitsbeginn gesetzt ist, bleibt die App vor 8 Uhr aus der Rotation ausgeblendet; ab
-8 Uhr erscheint sie mit `0:00` als Erinnerung. Der mittlere Knopf (select) am Panel setzt den
-Arbeitsbeginn jederzeit auf die aktuelle Uhrzeit — praktisch für den täglichen "Einstempeln"-Moment,
-ersetzt aber jedes Mal den vorherigen Wert.
+8 Uhr erscheint sie mit `0:00` als Erinnerung. Der mittlere Knopf (select) am Panel wechselt
+zwischen Einstempeln, Pausieren (Zeit einfrieren) und Fortsetzen (Pausendauer wird herausgerechnet).
 
 Die beiden Icon-IDs müssen auf dem Gerät installiert sein (Icons-Bereich der AWTRIX-Weboberfläche).
 Fehlt ein Icon oder schlägt das Dekodieren kurzzeitig fehl (Speicherengpass bei vielen aktiven
