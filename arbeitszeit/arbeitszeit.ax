@@ -1,0 +1,150 @@
+# @name      Arbeitszeit
+# @desc      Geleistete Arbeitszeit inkl. Pausenabzug; Icon wechselt bei Ueberstunden
+# @author    kirkanos
+# @version   1.0
+# @config    start      text   "Arbeitsbeginn"           default="" help="Format: SS:MM"
+# @config    soll       number "Sollstunden"             default=8 min=1 max=12 unit=h
+# @config    farbe      color  "Farbe"                   default=#00CC44
+# @config    ueberzeit  color  "Farbe Ueberstunden"      default=#FF8800
+# @config    icon_unter text   "Icon (unter Sollzeit)"   default="5582"
+# @config    icon_ueber text   "Icon (Ueberstunden)"     default="24443"
+# @config    ueber_max  number "Ueberstunden-Skala"      default=2 min=1 max=6 unit=h help="Wie viele Ueberstunden der Balken zusaetzlich fasst"
+# @config    max        number "Maximale Arbeitszeit"    default=10 min=1 max=14 unit=h help="Ab hier ertoent die Fanfare"
+
+import string
+
+class Arbeitszeit
+  var start_min, soll_min, total_min, max_min, configured
+  var farbe, ueberzeit, icon_unter, icon_ueber, track
+  var netto, over_min, fanfare_done, last_reset_day
+  var h_str, mm_str, text_x, colon_x, mm_x
+
+  def init()
+    self.farbe = store.get("farbe")
+    self.ueberzeit = store.get("ueberzeit")
+    self.icon_unter = store.get("icon_unter")
+    self.icon_ueber = store.get("icon_ueber")
+    self.soll_min = store.get("soll") * 60
+    self.total_min = self.soll_min + store.get("ueber_max") * 60
+    self.max_min = store.get("max") * 60
+    # unlit Balken-Track = Farbe bei einem Viertel Helligkeit, Kanal fuer Kanal
+    self.track = rgb(((self.farbe >> 16) & 0xFF) / 4, ((self.farbe >> 8) & 0xFF) / 4, (self.farbe & 0xFF) / 4)
+    self.configured = false
+    self.netto = nil
+    self.over_min = 0
+    self.fanfare_done = false
+    self.last_reset_day = -1
+    self.h_str = nil
+    self.mm_str = nil
+
+    var m = re.search("(\\d+):(\\d+)", store.get("start"))
+    if m == nil return end
+    self.start_min = self.parse_int(m[1]) * 60 + self.parse_int(m[2])
+    self.configured = true
+  end
+
+  # num() liest "09" als Oktalzahl und scheitert - deshalb Ziffern selbst umwandeln
+  def parse_int(s)
+    var n = 0
+    for i : 0 .. size(s) - 1
+      n = n * 10 + string.find("0123456789", s[i])
+    end
+    return n
+  end
+
+  def loop()
+    if !self.configured
+      return
+    end
+    if hour() < 0
+      return
+    end
+    if hour() == 0 && minute() == 0 && self.last_reset_day != day()
+      self.last_reset_day = day()
+      store.set("start", "")
+      self.configured = false
+      self.netto = nil
+      self.h_str = nil
+      self.mm_str = nil
+      self.fanfare_done = false
+      return
+    end
+    var brutto = hour() * 60 + minute() - self.start_min
+    if brutto < 0
+      brutto = 0
+    end
+    var pause = 0
+    if brutto >= 8 * 60
+      pause = 45                    # 30 Min ab 6h + 15 Min zusaetzlich ab 8h
+    elif brutto >= 6 * 60
+      pause = 30
+    end
+    self.netto = brutto - pause
+    if self.netto < 0
+      self.netto = 0
+    end
+    self.over_min = self.netto - self.soll_min
+    if self.over_min < 0
+      self.over_min = 0
+    end
+    if self.netto >= self.max_min && !self.fanfare_done
+      self.fanfare_done = true
+      notify({"text": "Feierabend!", "soundRtttl": "fanfare:d=8,o=5,b=140:c,e,g,c6,g,c6,2e6"})
+    end
+    var h = self.netto / 60
+    var mn = self.netto % 60
+    self.h_str = str(h)
+    self.mm_str = mn < 10 ? "0" + str(mn) : str(mn)
+
+    var w = width() - 9
+    var full_w = text_ink_width(self.h_str + ":" + self.mm_str)
+    self.text_x = 9 + (w - full_w) / 2
+    self.colon_x = self.text_x + text_width(self.h_str)
+    self.mm_x = self.colon_x + text_width(":")
+  end
+
+  def should_show()
+    if !self.configured
+      return false
+    end
+    return self.netto != nil
+  end
+
+  def draw()
+    clear()
+    if self.netto == nil
+      return
+    end
+    var col = self.over_min > 0 ? self.ueberzeit : self.farbe
+    var ic = self.over_min > 0 ? self.icon_ueber : self.icon_unter
+    if !icon(ic, 0, 0)
+      rect_fill(0, 0, 8, 8, 0x222222)
+    end
+
+    var w = width() - 9
+    if self.h_str != nil
+      text(self.text_x, 6, self.h_str, col)
+      if (now_ms() / 500) % 2 == 0
+        text(self.colon_x, 6, ":", col)          # blinkender Doppelpunkt
+      end
+      text(self.mm_x, 6, self.mm_str, col)
+    end
+
+    # Balken: normale Zeit in Farbe, ab Sollzeit werden Ueberstunden-Felder in
+    # der anderen Farbe hinten drangehaengt.
+    rect_fill(9, 7, w, 1, self.track)
+    var bis_soll = self.netto < self.soll_min ? self.netto : self.soll_min
+    var normal_fill = w * bis_soll / self.total_min
+    if normal_fill > 0
+      rect_fill(9, 7, normal_fill, 1, self.farbe)
+    end
+    if self.over_min > 0
+      var ueber_fill = w * clamp(self.over_min, 0, self.total_min - self.soll_min) / self.total_min
+      if ueber_fill > 0
+        rect_fill(9 + normal_fill, 7, ueber_fill, 1, self.ueberzeit)
+      end
+    end
+  end
+end
+
+return Arbeitszeit()

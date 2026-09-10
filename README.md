@@ -7,3 +7,5 @@
   README for setup.
 - [`urlaub/`](urlaub/) — Berry app: Countdown bis Urlaubsbeginn, danach verbleibende Urlaubstage,
   mit animiertem Laptop- bzw. Strand-Icon. See its README for setup.
+- [`arbeitszeit/`](arbeitszeit/) — Berry app: geleistete Arbeitszeit inkl. Pausenabzug, mit
+  Fortschrittsbalken für Sollzeit und Überstunden. See its README for setup.
