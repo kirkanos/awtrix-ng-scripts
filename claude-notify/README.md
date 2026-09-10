@@ -1,10 +1,10 @@
 # claude-notify
 
-Global Claude Code hooks that flash a status notification on an AWTRIX NG panel: a Claude icon on
-the left, "DONE `<project>`" (green, with a sound) when Claude finishes a task, "HELP `<project>`"
-(amber, with a different sound) when Claude needs your input. Fires for every Claude Code session
-on this machine, across all projects — `<project>` is the working directory's folder name, so you
-can tell sessions apart.
+Global Claude Code hooks that flash a status notification on an AWTRIX NG panel: an icon on
+the left (LaMetric icon `71832`), "DONE `<project>`" (green, with a sound) when Claude finishes a
+task, "HELP `<project>`" (amber, with a different sound) when Claude needs your input. Fires for
+every Claude Code session on this machine, across all projects — `<project>` is the working
+directory's folder name, so you can tell sessions apart.
 
 This is a copy of what's actually installed at `~/.claude/hooks/` and `~/.claude/settings.json`,
 kept here for reference/backup and so it can be reinstalled or copied to another machine.
@@ -16,9 +16,8 @@ kept here for reference/backup and so it can be reinstalled or copied to another
   sound, and posts it. Non-blocking (`curl -m 3 ... || true; exit 0`) so a network hiccup or an
   offline panel never blocks Claude Code.
 - **`claude-icon.gif`** — an 8x8 hand-generated asterisk icon in Claude's brand orange (`#DA7756`).
-  Not the Anthropic logo — a generic asterisk motif. Must be uploaded to the device once as
-  `/ICONS/claude.gif` so AWTRIX can reserve the icon column and auto-scroll the text next to it
-  (a `draw`-command icon doesn't scroll — text drawn that way is static and gets clipped instead).
+  Not the Anthropic logo — a generic asterisk motif. No longer used by default (see below), kept
+  here in case you want to switch back to it.
 - **`hooks-settings-snippet.json`** — the `hooks` block to merge into `~/.claude/settings.json`
   (global, user-level — applies to every project). The `Notification` entry is restricted with
   `"matcher": "permission_prompt|agent_needs_input"` — without it, Claude Code's periodic
@@ -35,7 +34,10 @@ kept here for reference/backup and so it can be reinstalled or copied to another
    chmod +x ~/.claude/hooks/awtrix-notify.sh
    ```
 
-2. Upload the icon to the AWTRIX device once:
+2. Make sure LaMetric icon `71832` is installed on the device (Icons area of the AWTRIX web UI) —
+   otherwise the notification still fires, just without an icon. To use the bundled
+   `claude-icon.gif` instead, upload it once and change `"icon":"71832"` in `awtrix-notify.sh` back
+   to `"icon":"claude"`:
 
    ```sh
    curl -X POST "http://<AWTRIX_HOST>/api/v1/files?dir=/ICONS" -F "file=@claude-icon.gif;filename=claude.gif"

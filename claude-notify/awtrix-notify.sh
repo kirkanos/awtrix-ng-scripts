@@ -5,8 +5,8 @@
 # Called from Claude Code's Stop / Notification hooks (see ~/.claude/settings.json).
 # Claude Code pipes the hook-event JSON (incl. "cwd") on stdin.
 #
-# Requires the "claude" icon to be uploaded once to the device:
-#   curl -X POST "http://<AWTRIX_HOST>/api/v1/files?dir=/ICONS" -F "file=@claude.gif"
+# Uses LaMetric icon 71832 - must be installed on the device (Icons area of the
+# AWTRIX web UI) or the notification just shows without an icon.
 set -euo pipefail
 
 INPUT_JSON="$(cat || true)"
@@ -46,7 +46,7 @@ TEXT="${TEXT//\"/\\\"}"
 
 curl -sS -m 3 -X POST "http://${AWTRIX_HOST}/api/v1/notifications" \
   -H "Content-Type: application/json" \
-  -d "{\"icon\":\"claude\",\"text\":\"${TEXT}\",\"textColor\":\"${COLOR}\",\"stack\":false,\"wakeup\":true,\"repeat\":2,\"soundRtttl\":\"${SOUND}\"}" \
+  -d "{\"icon\":\"71832\",\"text\":\"${TEXT}\",\"textColor\":\"${COLOR}\",\"stack\":false,\"wakeup\":true,\"repeat\":2,\"soundRtttl\":\"${SOUND}\"}" \
   >/dev/null 2>&1 || true
 
 exit 0
