@@ -4,11 +4,9 @@ Ein Berry-App fürs AWTRIX NG Panel: zeigt vor Urlaubsbeginn die Tage bis zum St
 Urlaubs die verbleibenden Tage bis zum Ende — danach blendet sich die App automatisch aus der
 Rotation aus.
 
-- Vor dem Urlaub: animiertes Laptop-Icon mit blinkendem Terminal-Text ("noch am Arbeiten").
-- Im Urlaub: animierte Strandszene (Sonne, schwankende Palme, wandernde Wellen).
-
-Beide Icons sind von Hand gezeichnet (`pixel`/`rect`/`circle_fill`), kein LaMetric-Icon-Download
-nötig.
+- Vor dem Urlaub: standardmäßig ein animiertes, von Hand gezeichnetes Laptop-Icon mit blinkendem
+  Terminal-Text ("noch am Arbeiten") — lässt sich per Icon-ID durch ein LaMetric-Icon ersetzen.
+- Im Urlaub: LaMetric-Icon (Standard-ID `15644`), konfigurierbar.
 
 ## Install
 
@@ -33,9 +31,16 @@ curl -sX PUT "http://$AWTRIX/api/v1/apps/script/urlaub" \
 | Urlaubsende | Enddatum, Format `JJJJ-MM-TT` | leer |
 | Farbe davor | Textfarbe für den Countdown vor dem Urlaub | Blau `#3399FF` |
 | Farbe im Urlaub | Textfarbe für die verbleibenden Urlaubstage | Grün `#00CC44` |
+| Icon (im Urlaub) | LaMetric-Icon-ID für die Urlaubszeit | `15644` |
+| Icon (davor) | LaMetric-Icon-ID für die Countdown-Phase; leer = gezeichneter Laptop | leer |
 
 Solange kein Datum eingetragen ist, bleibt die App aus der Rotation ausgeblendet. Speichern startet
 die App neu und liest die Werte neu ein.
+
+Icon-IDs müssen auf dem Gerät installiert sein (Icons-Bereich der AWTRIX-Weboberfläche). Schlägt das
+Dekodieren fehl (Icon fehlt oder kurzzeitiger Speicherengpass), zeigt die App bei "im Urlaub" ein
+dunkelgraues Platzhalter-Quadrat, bei "davor" fällt sie automatisch auf den gezeichneten Laptop
+zurück — genau wie wenn "Icon (davor)" gar nicht gesetzt ist.
 
 ## Hinweis: `num()` und führende Nullen
 

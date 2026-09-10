@@ -6,19 +6,21 @@
 # @config   ende     text  "Urlaubsende"       default="" help="Format: JJJJ-MM-TT"
 # @config   vor      color "Farbe davor"       default=#3399FF
 # @config   waehrend color "Farbe im Urlaub"   default=#00CC44
+# @config   icon_ur  text  "Icon (im Urlaub)"  default="15644"
+# @config   icon_vor text  "Icon (davor)"      default="" help="LaMetric-Icon-ID, leer = gezeichneter Laptop"
 
 import string
 
 class Urlaub
   var start_days, end_days, configured
-  var vor, waehrend
+  var vor, waehrend, icon_ur, icon_vor
   var today_days, label, tint, in_urlaub
-  var wave
 
   def init()
-    self.wave = [0, 1, 1, 0]                     # Wellenmuster fuers Icon, einmal gebaut
     self.vor = store.get("vor")
     self.waehrend = store.get("waehrend")
+    self.icon_ur = store.get("icon_ur")
+    self.icon_vor = store.get("icon_vor")
     self.tint = self.vor
     self.configured = false
     self.today_days = nil
@@ -86,31 +88,18 @@ class Urlaub
   def draw()
     clear()
     if self.in_urlaub
-      self.draw_beach()
+      if !icon(self.icon_ur, 0, 0)
+        rect_fill(0, 0, 8, 8, 0x222222)
+      end
     else
-      self.draw_laptop()
+      if !icon(self.icon_vor, 0, 0)
+        self.draw_laptop()               # kein Icon konfiguriert oder Dekodierung fehlgeschlagen
+      end
     end
     if self.label != nil
       var avail = width() - 9
       text(9 + (avail - text_ink_width(self.label)) / 2, 6, self.label, self.tint)
     end
-  end
-
-  # Strandszene: Sonne, schwingende Palme, wandernde Wellen
-  def draw_beach()
-    var phase = (now_ms() / 200) % 4
-    var sway = self.wave[phase]                   # 0 oder 1, laesst die Palme leicht schwanken
-    for x : 0 .. 7
-      pixel(x, 7, 0x0B3D91)
-      pixel(x, 6 + self.wave[(x + phase) % 4], 0x2299FF)
-    end
-    circle_fill(6, 1, 1, 0xFFD400)                 # Sonne
-    pixel(2, 2, 0x8B5A2B)
-    pixel(2, 3, 0x8B5A2B)
-    pixel(3, 4, 0x8B5A2B)                          # Stamm
-    pixel(1 + sway, 0, 0x2E8B57)
-    pixel(3 + sway, 0, 0x2E8B57)
-    pixel(2 + sway, 1, 0x2E8B57)                   # Blaetter
   end
 
   # Arbeitender Laptop mit blinkendem Terminaltext
