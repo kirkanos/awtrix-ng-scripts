@@ -53,13 +53,10 @@ class Arbeitszeit
   end
 
   def loop()
-    if !self.configured
-      return
-    end
     if hour() < 0
       return
     end
-    if hour() == 0 && minute() == 0 && self.last_reset_day != day()
+    if self.configured && hour() == 0 && minute() == 0 && self.last_reset_day != day()
       self.last_reset_day = day()
       store.set("start", "")
       self.configured = false
@@ -67,6 +64,14 @@ class Arbeitszeit
       self.h_str = nil
       self.mm_str = nil
       self.fanfare_done = false
+      return
+    end
+    if !self.configured
+      # Ab 8 Uhr als Erinnerung mit 0:00 zeigen, bis per Knopf oder Einstellung
+      # ein Arbeitsbeginn gesetzt wird.
+      self.netto = 0
+      self.over_min = 0
+      self.set_time_strings("0", "00")
       return
     end
     var brutto = hour() * 60 + minute() - self.start_min
@@ -91,23 +96,37 @@ class Arbeitszeit
       self.fanfare_done = true
       notify({"text": "Feierabend!", "soundRtttl": "fanfare:d=8,o=5,b=140:c,e,g,c6,g,c6,2e6"})
     end
-    var h = self.netto / 60
     var mn = self.netto % 60
-    self.h_str = str(h)
-    self.mm_str = mn < 10 ? "0" + str(mn) : str(mn)
+    self.set_time_strings(str(self.netto / 60), mn < 10 ? "0" + str(mn) : str(mn))
+  end
 
+  # h_str/mm_str setzen und die Textpositionen (inkl. blinkender Doppelpunkt) neu berechnen
+  def set_time_strings(h_str, mm_str)
+    self.h_str = h_str
+    self.mm_str = mm_str
     var w = width() - 9
-    var full_w = text_ink_width(self.h_str + ":" + self.mm_str)
+    var full_w = text_ink_width(h_str + ":" + mm_str)
     self.text_x = 9 + (w - full_w) / 2
-    self.colon_x = self.text_x + text_width(self.h_str)
+    self.colon_x = self.text_x + text_width(h_str)
     self.mm_x = self.colon_x + text_width(":")
   end
 
-  def should_show()
-    if !self.configured
-      return false
+  def on_button(btn)
+    if btn == "select"
+      var hh = hour() < 10 ? "0" + str(hour()) : str(hour())
+      var mi = minute() < 10 ? "0" + str(minute()) : str(minute())
+      store.set("start", hh + ":" + mi)
+      self.start_min = hour() * 60 + minute()
+      self.configured = true
+      self.fanfare_done = false
     end
-    return self.netto != nil
+  end
+
+  def should_show()
+    if self.configured
+      return self.netto != nil
+    end
+    return hour() >= 8               # Erinnerung ab 8 Uhr, auch ohne gesetzten Arbeitsbeginn
   end
 
   def draw()
