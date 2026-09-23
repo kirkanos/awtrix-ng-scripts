@@ -3,12 +3,22 @@
 # Usage: night-mode.sh {off|on|status}
 set -euo pipefail
 
+# Values already exported in the environment win over the .env, so remember them
+# before sourcing and put them back afterwards.
+ENV_HOST="${AWTRIX_HOST:-}"
+ENV_USER="${AWTRIX_USER:-}"
+ENV_PASS="${AWTRIX_PASS:-}"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${AWTRIX_ENV_FILE:-$SCRIPT_DIR/.env}"
 if [ -f "$ENV_FILE" ]; then
   # shellcheck disable=SC1090
   source "$ENV_FILE"
 fi
+
+[ -n "$ENV_HOST" ] && AWTRIX_HOST="$ENV_HOST"
+[ -n "$ENV_USER" ] && AWTRIX_USER="$ENV_USER"
+[ -n "$ENV_PASS" ] && AWTRIX_PASS="$ENV_PASS"
 
 : "${AWTRIX_HOST:?Set AWTRIX_HOST in $ENV_FILE (copy .env.example to .env) or in the environment}"
 
