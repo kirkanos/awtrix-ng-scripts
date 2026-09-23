@@ -15,6 +15,9 @@ kept here for reference/backup and so it can be reinstalled or copied to another
   the AWTRIX notification (`POST /api/v1/notifications`) with icon, scrolling text and an RTTTL
   sound, and posts it. Non-blocking (`curl -m 3 ... || true; exit 0`) so a network hiccup or an
   offline panel never blocks Claude Code.
+- **`.env.example`** — template for the `.env` holding the panel's address. Copy it next to the
+  installed script (`~/.claude/hooks/.env`); `.env` is gitignored so the address stays out of the
+  repo.
 - **`claude-icon.gif`** — an 8x8 hand-generated asterisk icon in Claude's brand orange (`#DA7756`).
   Not the Anthropic logo — a generic asterisk motif. No longer used by default (see below), kept
   here in case you want to switch back to it.
@@ -43,8 +46,15 @@ kept here for reference/backup and so it can be reinstalled or copied to another
    curl -X POST "http://<AWTRIX_HOST>/api/v1/files?dir=/ICONS" -F "file=@claude-icon.gif;filename=claude.gif"
    ```
 
-3. If the device's IP differs from `192.168.1.42`, edit the `AWTRIX_HOST` default near the top of
-   `awtrix-notify.sh`, or export `AWTRIX_NOTIFY_HOST` in your shell profile.
+3. Point the script at the panel — without an address it exits quietly and nothing fires:
+
+   ```sh
+   cp .env.example ~/.claude/hooks/.env
+   # then edit AWTRIX_NOTIFY_HOST in that file
+   ```
+
+   Alternatively export `AWTRIX_NOTIFY_HOST` in your shell profile (it wins over the `.env`), or
+   point `AWTRIX_NOTIFY_ENV_FILE` at an env file elsewhere.
 
 4. Merge the `hooks` block from `hooks-settings-snippet.json` into `~/.claude/settings.json` —
    **merge, don't overwrite**; keep any existing keys (permissions, model, etc.) in that file.

@@ -5,13 +5,28 @@
 # Called from Claude Code's Stop / Notification hooks (see ~/.claude/settings.json).
 # Claude Code pipes the hook-event JSON (incl. "cwd") on stdin.
 #
+# The panel's address comes from AWTRIX_NOTIFY_HOST, or from a .env next to the
+# script (copy .env.example). Without it the script exits quietly - a missing
+# config must never block Claude Code.
+#
 # Uses LaMetric icon 71832 - must be installed on the device (Icons area of the
 # AWTRIX web UI) or the notification just shows without an icon.
 set -euo pipefail
 
 INPUT_JSON="$(cat || true)"
 
-AWTRIX_HOST="${AWTRIX_NOTIFY_HOST:-192.168.1.42}"
+# An exported AWTRIX_NOTIFY_HOST wins over the .env, so remember it before sourcing.
+AWTRIX_HOST="${AWTRIX_NOTIFY_HOST:-}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${AWTRIX_NOTIFY_ENV_FILE:-$SCRIPT_DIR/.env}"
+if [ -z "$AWTRIX_HOST" ] && [ -f "$ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  AWTRIX_HOST="${AWTRIX_NOTIFY_HOST:-}"
+fi
+
+[ -z "$AWTRIX_HOST" ] && exit 0
 
 CWD=""
 if command -v jq >/dev/null 2>&1; then
