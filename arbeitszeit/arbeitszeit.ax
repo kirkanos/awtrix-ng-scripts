@@ -175,8 +175,11 @@ class Arbeitszeit
     var w = width() - 9
     if self.h_str != nil
       text(self.text_x, 6, self.h_str, col)
-      if (now_ms() / 500) % 2 == 0
-        text(self.colon_x, 6, ":", col)          # blinkender Doppelpunkt
+      # Doppelpunkt blinkt nur, solange die Zeit laeuft; pausiert oder noch nicht
+      # eingestempelt steht er still, damit man den Stillstand sieht.
+      var laeuft = self.configured && !self.stopped
+      if !laeuft || (now_ms() / 500) % 2 == 0
+        text(self.colon_x, 6, ":", col)
       end
       text(self.mm_x, 6, self.mm_str, col)
     end
