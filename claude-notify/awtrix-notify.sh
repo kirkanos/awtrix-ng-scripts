@@ -9,6 +9,11 @@
 # script (copy .env.example). Without it the script exits quietly - a missing
 # config must never block Claude Code.
 #
+# Optional: with AWTRIX_DECK_PORT set, the same state is also posted to the
+# "AWTRIX Remote" Stream Deck plugin listening on 127.0.0.1:<port>. Without
+# the variable nothing is sent there, and a plugin that is not running is
+# ignored, so the panel notification works with and without a Stream Deck.
+#
 # Uses LaMetric icon 71832 - must be installed on the device (Icons area of the
 # AWTRIX web UI) or the notification just shows without an icon.
 set -euo pipefail
@@ -17,6 +22,7 @@ INPUT_JSON="$(cat || true)"
 
 # An exported AWTRIX_NOTIFY_HOST wins over the .env, so remember it before sourcing.
 AWTRIX_HOST="${AWTRIX_NOTIFY_HOST:-}"
+DECK_PORT="${AWTRIX_DECK_PORT:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${AWTRIX_NOTIFY_ENV_FILE:-$SCRIPT_DIR/.env}"
@@ -25,8 +31,13 @@ if [ -z "$AWTRIX_HOST" ] && [ -f "$ENV_FILE" ]; then
   source "$ENV_FILE"
   AWTRIX_HOST="${AWTRIX_NOTIFY_HOST:-}"
 fi
+if [ -z "$DECK_PORT" ] && [ -f "$ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  DECK_PORT="${AWTRIX_DECK_PORT:-}"
+fi
 
-[ -z "$AWTRIX_HOST" ] && exit 0
+[ -z "$AWTRIX_HOST" ] && [ -z "$DECK_PORT" ] && exit 0
 
 CWD=""
 if command -v jq >/dev/null 2>&1; then
@@ -59,9 +70,21 @@ TEXT="${LABEL} ${PROJECT}"
 TEXT="${TEXT//\\/\\\\}"
 TEXT="${TEXT//\"/\\\"}"
 
-curl -sS -m 3 -X POST "http://${AWTRIX_HOST}/api/v1/notifications" \
-  -H "Content-Type: application/json" \
-  -d "{\"icon\":\"71832\",\"text\":\"${TEXT}\",\"textColor\":\"${COLOR}\",\"stack\":false,\"wakeup\":true,\"repeat\":2,\"soundRtttl\":\"${SOUND}\"}" \
-  >/dev/null 2>&1 || true
+if [ -n "$AWTRIX_HOST" ]; then
+  curl -sS -m 3 -X POST "http://${AWTRIX_HOST}/api/v1/notifications" \
+    -H "Content-Type: application/json" \
+    -d "{\"icon\":\"71832\",\"text\":\"${TEXT}\",\"textColor\":\"${COLOR}\",\"stack\":false,\"wakeup\":true,\"repeat\":2,\"soundRtttl\":\"${SOUND}\"}" \
+    >/dev/null 2>&1 || true
+fi
+
+# Stream Deck plugin (AWTRIX Remote, Claude Status key): same state, local only.
+if [ -n "$DECK_PORT" ]; then
+  PROJECT_JSON="${PROJECT//\\/\\\\}"
+  PROJECT_JSON="${PROJECT_JSON//\"/\\\"}"
+  curl -sS -m 1 -X POST "http://127.0.0.1:${DECK_PORT}/" \
+    -H "Content-Type: application/json" \
+    -d "{\"state\":\"${1}\",\"project\":\"${PROJECT_JSON}\"}" \
+    >/dev/null 2>&1 || true
+fi
 
 exit 0

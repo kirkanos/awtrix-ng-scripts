@@ -17,7 +17,10 @@ kept here for reference/backup and so it can be reinstalled or copied to another
   offline panel never blocks Claude Code.
 - **`.env.example`** — template for the `.env` holding the panel's address. Copy it next to the
   installed script (`~/.claude/hooks/.env`); `.env` is gitignored so the address stays out of the
-  repo.
+  repo. The optional `AWTRIX_DECK_PORT` in the same file also reports the state to the
+  [AWTRIX Remote](https://github.com/kirkanos/Streamdeck-Awtrix) Stream Deck plugin (Claude Status
+  key) on `127.0.0.1:<port>`; without it nothing is sent there, and a plugin that is not running
+  is ignored (`curl -m 1 ... || true`), so the panel notification is unaffected either way.
 - **`claude-icon.gif`** — an 8x8 hand-generated asterisk icon in Claude's brand orange (`#DA7756`).
   Not the Anthropic logo — a generic asterisk motif. No longer used by default (see below), kept
   here in case you want to switch back to it.
@@ -54,7 +57,9 @@ kept here for reference/backup and so it can be reinstalled or copied to another
    ```
 
    Alternatively export `AWTRIX_NOTIFY_HOST` in your shell profile (it wins over the `.env`), or
-   point `AWTRIX_NOTIFY_ENV_FILE` at an env file elsewhere.
+   point `AWTRIX_NOTIFY_ENV_FILE` at an env file elsewhere. With a Stream Deck, also set
+   `AWTRIX_DECK_PORT=42931` (the plugin's default listener port) in the `.env`; either address
+   alone is enough for the script to run.
 
 4. Merge the `hooks` block from `hooks-settings-snippet.json` into `~/.claude/settings.json` —
    **merge, don't overwrite**; keep any existing keys (permissions, model, etc.) in that file.
@@ -70,3 +75,6 @@ echo '{"cwd":"'"$PWD"'"}' | ~/.claude/hooks/awtrix-notify.sh input
 ```
 
 Each should flash the icon + "DONE `<folder>`" / "HELP `<folder>`" on the panel with a sound.
+With `AWTRIX_DECK_PORT` set and the AWTRIX Remote plugin running, the Claude Status key on the
+Stream Deck turns green / amber at the same time; `curl http://127.0.0.1:42931/` lists what the
+plugin received.
