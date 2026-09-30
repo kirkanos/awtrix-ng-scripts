@@ -90,6 +90,20 @@ Die beiden Icon-IDs müssen auf dem Gerät installiert sein (Icons-Bereich der A
 Fehlt ein Icon oder schlägt das Dekodieren kurzzeitig fehl (Speicherengpass bei vielen aktiven
 Scripts), zeigt die App stattdessen ein dunkelgraues Platzhalter-Quadrat statt eines Lochs.
 
+## Test ohne Gerät
+
+`test_arbeitszeit.be` stubbt die AWTRIX-Laufzeit (store, mqtt, Uhr, Zeichnen) und prüft Knopf,
+MQTT-Befehle, Pausenregeln und Mitternachts-Reset. Braucht ein Standalone-Berry
+([berry-lang/berry](https://github.com/berry-lang/berry), `make`), dann im Ordner `arbeitszeit/`:
+`berry test_arbeitszeit.be`.
+
+## Hinweis: Speicher
+
+Das Panel kompiliert jedes Script in den gemeinsamen Berry-Heap; jede Methode kostet dauerhaft
+Speicher. Die App ist deshalb auf wenige Methoden gehalten (alle Befehle laufen durch `apply()`).
+Meldet die Weboberfläche beim Speichern „out of memory“, hilft ein Neustart des Panels (der Heap
+wird dabei defragmentiert) und ein erneutes Speichern.
+
 ## Hinweis: `num()` und führende Nullen
 
 Wie bei [`urlaub/`](../urlaub/) beschrieben, scheitert `num()` an Strings mit führender Null (z. B.

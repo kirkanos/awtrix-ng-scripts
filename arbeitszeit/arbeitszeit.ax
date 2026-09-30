@@ -10,8 +10,8 @@
 # @config    icon_ueber text   "Icon (Ueberstunden)"     default="24443"
 # @config    ueber_max  number "Ueberstunden-Skala"      default=2 min=1 max=6 unit=h help="Wie viele Ueberstunden der Balken zusaetzlich fasst"
 # @config    max        number "Maximale Arbeitszeit"    default=10 min=1 max=14 unit=h help="Ab hier ertoent die Fanfare"
-# @config    mqtt       bool   "MQTT (Stream Deck)"      default=true help="Zustand auf <Topic>/state melden und Befehle auf <Topic>/cmd annehmen; ohne Broker wirkungslos"
-# @config    topic      text   "MQTT-Topic"              default="awtrix/arbeitszeit" help="Basis-Topic fuer state und cmd"
+# @config    mqtt       bool   "MQTT (Stream Deck)"      default=true help="Zustand auf <Topic>/state, Befehle auf <Topic>/cmd"
+# @config    topic      text   "MQTT-Topic"              default="awtrix/arbeitszeit"
 
 import string
 
@@ -20,7 +20,7 @@ class Arbeitszeit
   var farbe, ueberzeit, icon_unter, icon_ueber, track
   var netto, over_min, fanfare_done, last_reset_day, stopped, paused_at
   var h_str, mm_str, text_x, colon_x, mm_x
-  var mqtt_on, topic, last_pub_min
+  var mqtt_on, topic, last_pub
 
   def init()
     self.farbe = store.get("farbe")
@@ -41,11 +41,10 @@ class Arbeitszeit
     self.paused_at = nil
     self.h_str = nil
     self.mm_str = nil
-    # MQTT ist optional: ohne Broker sind publish/subscribe wirkungslos, mit
-    # abgeschaltetem Schalter wird gar nicht erst gesendet.
+    # MQTT optional: ohne Broker wirkungslos, mit Schalter aus wird nichts gesendet
     self.mqtt_on = store.get("mqtt")
     self.topic = store.get("topic")
-    self.last_pub_min = -1
+    self.last_pub = -1
 
     var m = re.search("(\\d+):(\\d+)", store.get("start"))
     if m == nil return end
@@ -55,7 +54,7 @@ class Arbeitszeit
 
   def setup()
     if self.mqtt_on
-      mqtt.subscribe(self.topic + "/cmd", / t, p -> self.on_cmd(t, p))
+      mqtt.subscribe(self.topic + "/cmd", / t, p -> self.apply(p))
     end
   end
 
@@ -74,47 +73,44 @@ class Arbeitszeit
     end
     if self.configured && hour() == 0 && minute() == 0 && self.last_reset_day != day()
       self.last_reset_day = day()
-      self.reset()
+      self.apply("reset")
       return
     end
     if !self.configured
-      # Ab 8 Uhr als Erinnerung mit 0:00 zeigen, bis per Knopf oder Einstellung
-      # ein Arbeitsbeginn gesetzt wird.
+      # Ab 8 Uhr als Erinnerung mit 0:00 zeigen, bis ein Arbeitsbeginn gesetzt wird
       self.netto = 0
       self.over_min = 0
       self.set_time_strings("0", "00")
-      self.publish_minutely()
-      return
+    elif !self.stopped                # pausiert: eingefroren lassen
+      var brutto = hour() * 60 + minute() - self.start_min
+      if brutto < 0
+        brutto = 0
+      end
+      var pause = 0
+      if brutto >= 8 * 60
+        pause = 45                    # 30 Min ab 6h + 15 Min zusaetzlich ab 8h
+      elif brutto >= 6 * 60
+        pause = 30
+      end
+      self.netto = brutto - pause
+      if self.netto < 0
+        self.netto = 0
+      end
+      self.over_min = self.netto - self.soll_min
+      if self.over_min < 0
+        self.over_min = 0
+      end
+      if self.netto >= self.max_min && !self.fanfare_done
+        self.fanfare_done = true
+        notify({"text": "Feierabend!", "soundRtttl": "fanfare:d=8,o=5,b=140:c,e,g,c6,g,c6,2e6"})
+      end
+      var mn = self.netto % 60
+      self.set_time_strings(str(self.netto / 60), mn < 10 ? "0" + str(mn) : str(mn))
     end
-    if self.stopped
-      self.publish_minutely()
-      return                          # eingefroren, bis Mitternachts-Reset oder erneutes Einstempeln
+    # Einmal pro Minute melden, damit ein neu verbundener Client den Zustand bekommt
+    if self.mqtt_on && hour() * 60 + minute() != self.last_pub
+      self.publish_state()
     end
-    var brutto = hour() * 60 + minute() - self.start_min
-    if brutto < 0
-      brutto = 0
-    end
-    var pause = 0
-    if brutto >= 8 * 60
-      pause = 45                    # 30 Min ab 6h + 15 Min zusaetzlich ab 8h
-    elif brutto >= 6 * 60
-      pause = 30
-    end
-    self.netto = brutto - pause
-    if self.netto < 0
-      self.netto = 0
-    end
-    self.over_min = self.netto - self.soll_min
-    if self.over_min < 0
-      self.over_min = 0
-    end
-    if self.netto >= self.max_min && !self.fanfare_done
-      self.fanfare_done = true
-      notify({"text": "Feierabend!", "soundRtttl": "fanfare:d=8,o=5,b=140:c,e,g,c6,g,c6,2e6"})
-    end
-    var mn = self.netto % 60
-    self.set_time_strings(str(self.netto / 60), mn < 10 ? "0" + str(mn) : str(mn))
-    self.publish_minutely()
   end
 
   # h_str/mm_str setzen und die Textpositionen (inkl. blinkender Doppelpunkt) neu berechnen
@@ -128,72 +124,52 @@ class Arbeitszeit
     self.mm_x = self.colon_x + text_width(":")
   end
 
-  # Select-Knopf: einstempeln, Pause, weiter - derselbe Weg wie die MQTT-Befehle
   def on_button(btn)
     if btn == "select"
-      if !self.configured
-        self.clock_in()
-      elif !self.stopped
-        self.pause()
-      else
-        self.resume()
+      self.apply(!self.configured ? "clock_in" : (!self.stopped ? "pause" : "resume"))
+    end
+  end
+
+  # Ein Befehl vom Select-Knopf, per MQTT oder von Mitternacht: clock_in, pause, resume, reset, state.
+  # Unpassende Befehle (z. B. pause ohne laufende Zeit) werden ignoriert.
+  def apply(cmd)
+    var now = hour() * 60 + minute()
+    if cmd == "clock_in" && !self.configured
+      self.start_min = now
+      self.configured = true
+      self.stopped = false
+      self.paused_at = nil
+      self.fanfare_done = false
+    elif cmd == "pause" && self.configured && !self.stopped
+      self.stopped = true
+      self.paused_at = now                          # ausstempeln: Zeit einfrieren
+    elif cmd == "resume" && self.configured && self.stopped
+      var pause_len = now - self.paused_at
+      if pause_len < 0
+        pause_len = 0
       end
+      self.start_min += pause_len                   # Pause herausrechnen statt neu einzustempeln
+      self.stopped = false
+      self.paused_at = nil
+    elif cmd == "reset" && self.configured
+      self.configured = false
+      self.netto = nil
+      self.h_str = nil
+      self.mm_str = nil
+      self.fanfare_done = false
+      self.stopped = false
+      self.paused_at = nil
+    elif cmd != "state"
+      return
     end
-  end
-
-  # Befehle vom Stream Deck (oder jedem anderen MQTT-Client), wie der Select-Knopf
-  def on_cmd(topic, payload)
-    if payload == "clock_in"
-      if !self.configured self.clock_in() end
-    elif payload == "pause"
-      if self.configured && !self.stopped self.pause() end
-    elif payload == "resume"
-      if self.configured && self.stopped self.resume() end
-    elif payload == "reset"
-      if self.configured self.reset() end
-    elif payload == "state"
-      self.publish_state()
+    if cmd == "clock_in" || cmd == "resume"
+      # start_min als "SS:MM" zurueck in die Einstellungen schreiben
+      var hh = self.start_min / 60
+      var mi = self.start_min % 60
+      store.set("start", (hh < 10 ? "0" + str(hh) : str(hh)) + ":" + (mi < 10 ? "0" + str(mi) : str(mi)))
+    elif cmd == "reset"
+      store.set("start", "")
     end
-  end
-
-  def clock_in()
-    self.start_min = hour() * 60 + minute()
-    self.save_start()
-    self.configured = true
-    self.stopped = false
-    self.paused_at = nil
-    self.fanfare_done = false
-    self.publish_state()
-  end
-
-  def pause()
-    self.stopped = true
-    self.paused_at = hour() * 60 + minute()      # ausstempeln: Zeit einfrieren
-    self.publish_state()
-  end
-
-  def resume()
-    var pause_len = hour() * 60 + minute() - self.paused_at
-    if pause_len < 0
-      pause_len = 0
-    end
-    self.start_min += pause_len                  # Pause herausrechnen statt neu einzustempeln
-    self.save_start()
-    self.stopped = false
-    self.paused_at = nil
-    self.publish_state()
-  end
-
-  # Arbeitstag beenden (Mitternacht oder Befehl): Arbeitsbeginn leeren
-  def reset()
-    store.set("start", "")
-    self.configured = false
-    self.netto = nil
-    self.h_str = nil
-    self.mm_str = nil
-    self.fanfare_done = false
-    self.stopped = false
-    self.paused_at = nil
     self.publish_state()
   end
 
@@ -206,23 +182,7 @@ class Arbeitszeit
     var n = self.netto != nil ? str(self.netto) : "0"
     mqtt.publish(self.topic + "/state",
       "{\"start_min\":" + s + ",\"paused\":" + p + ",\"pause_min\":" + pm + ",\"net_min\":" + n + "}")
-    self.last_pub_min = hour() * 60 + minute()
-  end
-
-  # Einmal pro Minute, damit ein neu verbundener Client den Zustand ohne Anfrage bekommt
-  def publish_minutely()
-    if self.mqtt_on && hour() * 60 + minute() != self.last_pub_min
-      self.publish_state()
-    end
-  end
-
-  # start_min als "SS:MM" zurueck in die Einstellungen schreiben
-  def save_start()
-    var hh = self.start_min / 60
-    var mi = self.start_min % 60
-    var hh_s = hh < 10 ? "0" + str(hh) : str(hh)
-    var mi_s = mi < 10 ? "0" + str(mi) : str(mi)
-    store.set("start", hh_s + ":" + mi_s)
+    self.last_pub = hour() * 60 + minute()
   end
 
   def should_show()
@@ -246,8 +206,7 @@ class Arbeitszeit
     var w = width() - 9
     if self.h_str != nil
       text(self.text_x, 6, self.h_str, col)
-      # Doppelpunkt blinkt nur, solange die Zeit laeuft; pausiert oder noch nicht
-      # eingestempelt steht er still, damit man den Stillstand sieht.
+      # Doppelpunkt blinkt nur, solange die Zeit laeuft
       var laeuft = self.configured && !self.stopped
       if !laeuft || (now_ms() / 500) % 2 == 0
         text(self.colon_x, 6, ":", col)
@@ -255,8 +214,7 @@ class Arbeitszeit
       text(self.mm_x, 6, self.mm_str, col)
     end
 
-    # Balken: normale Zeit in Farbe, ab Sollzeit werden Ueberstunden-Felder in
-    # der anderen Farbe hinten drangehaengt.
+    # Balken: normale Zeit in Farbe, ab Sollzeit Ueberstunden-Felder in der anderen Farbe
     rect_fill(9, 7, w, 1, self.track)
     var bis_soll = self.netto < self.soll_min ? self.netto : self.soll_min
     var normal_fill = w * bis_soll / self.total_min
