@@ -24,6 +24,29 @@ Bei Erreichen der maximalen Arbeitszeit ertönt einmalig eine Fanfare samt Benac
 "Feierabend!". Nachts um 0 Uhr wird der Arbeitsbeginn automatisch zurückgesetzt (leer), damit am
 nächsten Morgen wieder neu gestartet werden kann (per Knopf oder Einstellung).
 
+## MQTT (Stream Deck)
+
+Optional, standardmäßig eingeschaltet, ohne konfigurierten MQTT-Broker wirkungslos (die
+Berry-Aufrufe `mqtt.publish`/`mqtt.subscribe` sind dann No-ops). Damit spiegelt das
+[Worktime-Plugin](https://github.com/kirkanos/Streamdeck-Arbeitszeit) fürs Stream Deck die Anzeige
+und kann ein-, aus- und weiterstempeln; das Panel bleibt die Wahrheit, der Knopf am Gerät
+funktioniert unverändert.
+
+- `<Topic>/state` (Standard `awtrix/arbeitszeit/state`): JSON
+  `{"start_min":452,"paused":false,"pause_min":0,"net_min":123}` — `start_min` ist der
+  Arbeitsbeginn als Minute des Tages (`null` ohne Arbeitsbeginn), `paused` ob die Zeit eingefroren
+  ist, `pause_min` die Minute des Tages, in der die Pause begann (`0` sonst), `net_min` die
+  angezeigte Nettozeit. Gesendet bei jeder Änderung, einmal pro Minute und auf den Befehl `state`.
+- `<Topic>/cmd`: Klartext-Befehle `clock_in`, `pause`, `resume`, `reset`, `state` — genau wie der
+  Select-Knopf; unpassende Befehle (z. B. `pause` ohne laufende Zeit) werden ignoriert.
+
+Prüfen, sobald der Broker in den AWTRIX-Systemeinstellungen eingetragen ist:
+
+```sh
+mosquitto_sub -h <broker> -t 'awtrix/arbeitszeit/state' -v
+mosquitto_pub -h <broker> -t 'awtrix/arbeitszeit/cmd' -m state
+```
+
 ## Pausenregel
 
 - Ab 6 Stunden Bruttozeit werden 30 Minuten Pause von der geleisteten Zeit abgezogen.
@@ -56,6 +79,8 @@ curl -sX PUT "http://$AWTRIX/api/v1/apps/script/arbeitszeit" \
 | Icon (Ueberstunden) | LaMetric-Icon-ID ab Erreichen der Sollzeit | `24443` |
 | Ueberstunden-Skala | Wie viele Überstunden der Balken zusätzlich fasst, bevor er ganz voll ist | `2` h |
 | Maximale Arbeitszeit | Ab dieser geleisteten Zeit ertönt einmalig die Fanfare | `10` h |
+| MQTT (Stream Deck) | Zustand per MQTT melden und Befehle annehmen (siehe oben) | an |
+| MQTT-Topic | Basis-Topic für `state` und `cmd` | `awtrix/arbeitszeit` |
 
 Solange kein Arbeitsbeginn gesetzt ist, bleibt die App vor 8 Uhr aus der Rotation ausgeblendet; ab
 8 Uhr erscheint sie mit `0:00` als Erinnerung. Der mittlere Knopf (select) am Panel wechselt
