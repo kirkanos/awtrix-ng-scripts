@@ -16,6 +16,10 @@
 #
 # Uses LaMetric icon 71832 - must be installed on the device (Icons area of the
 # AWTRIX web UI) or the notification just shows without an icon.
+#
+# The sound goes in as {"sound":{"rtttl":...}}. Firmware 1.2 dropped the old
+# flat "soundRtttl" field and rejects the WHOLE request with 422 when it is
+# used, so the notification silently stopped appearing.
 set -euo pipefail
 
 INPUT_JSON="$(cat || true)"
@@ -73,7 +77,7 @@ TEXT="${TEXT//\"/\\\"}"
 if [ -n "$AWTRIX_HOST" ]; then
   curl -sS -m 3 -X POST "http://${AWTRIX_HOST}/api/v1/notifications" \
     -H "Content-Type: application/json" \
-    -d "{\"icon\":\"71832\",\"text\":\"${TEXT}\",\"textColor\":\"${COLOR}\",\"stack\":false,\"wakeup\":true,\"repeat\":2,\"soundRtttl\":\"${SOUND}\"}" \
+    -d "{\"icon\":\"71832\",\"text\":\"${TEXT}\",\"textColor\":\"${COLOR}\",\"stack\":false,\"wakeup\":true,\"repeat\":2,\"sound\":{\"rtttl\":\"${SOUND}\"}}" \
     >/dev/null 2>&1 || true
 fi
 

@@ -102,7 +102,7 @@ class Arbeitszeit
       end
       if self.netto >= self.max_min && !self.fanfare_done
         self.fanfare_done = true
-        notify({"text": "Feierabend!", "soundRtttl": "fanfare:d=8,o=5,b=140:c,e,g,c6,g,c6,2e6"})
+        notify({"text": "Feierabend!", "sound": {"rtttl": "fanfare:d=8,o=5,b=140:c,e,g,c6,g,c6,2e6"}})
       end
       var mn = self.netto % 60
       self.set_time_strings(str(self.netto / 60), mn < 10 ? "0" + str(mn) : str(mn))

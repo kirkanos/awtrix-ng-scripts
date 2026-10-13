@@ -498,17 +498,15 @@ keys of the spec map:
 | `hold` | bool | stay until dismissed instead of auto-expiring |
 | `stack` | bool | queue behind existing notifications (default `true`); `false` replaces the current one |
 | `wakeup` | bool | render even while the display is powered off |
-| `soundRtttl` | string | an inline RTTTL melody |
-| `sound` | string | a melody file already on the device |
-| `soundLoop` | bool | repeat the melody while the notification is shown |
+| `sound` | string, map or list | a sound: a bare name, or a map with ONE source key - `file`, `rtttl`, `song`, `speech` or `track`; add `'loop': true` to repeat it while the notification shows |
 | `effect`, `overlay` | string | same names as section 5.4 |
 
 ```berry
-    notify({"text": "Doorbell", "icon": "1234", "soundRtttl": "d:d=4,o=5,b=120:c,e,g"})
+    notify({"text": "Doorbell", "icon": "1234", "sound": {"rtttl": "d:d=4,o=5,b=120:c,e,g"}})
 ```
 
-Sound is gated on the device's global sound setting, and `soundRtttl` wins over `sound` when both
-are given.
+Sound is gated on the device's global sound setting. There is no flat `soundRtttl` key - firmware
+1.2 removed it, and the whole payload is refused when it is used.
 
 ### 5.11 Storage
 
