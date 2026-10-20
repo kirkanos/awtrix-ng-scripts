@@ -1,9 +1,10 @@
 # @name      Arbeitszeit
 # @desc      Geleistete Arbeitszeit inkl. Pausenabzug; Icon wechselt bei Ueberstunden
 # @author    kirkanos
-# @version   1.1
+# @version   1.2
 # @config    start      text   "Arbeitsbeginn"           default="" help="Format: SS:MM"
 # @config    soll       number "Sollstunden"             default=8 min=1 max=12 unit=h
+# @config    pause      number "Gedrueckte Pause"        default=0 min=0 max=480 unit=min help="Summe der heute gedrueckten Pausen; wird gegen die gesetzliche gerechnet"
 # @config    farbe      color  "Farbe"                   default=#00CC44
 # @config    ueberzeit  color  "Farbe Ueberstunden"      default=#FF8800
 # @config    icon_unter text   "Icon (unter Sollzeit)"   default="5582"
@@ -18,7 +19,7 @@ import string
 class Arbeitszeit
   var start_min, soll_min, total_min, max_min, configured
   var farbe, ueberzeit, icon_unter, icon_ueber, track
-  var netto, over_min, fanfare_done, last_reset_day, stopped, paused_at
+  var netto, over_min, fanfare_done, last_reset_day, stopped, paused_at, pause_min
   var h_str, mm_str, text_x, colon_x, mm_x
   var mqtt_on, topic, last_pub
 
@@ -39,6 +40,7 @@ class Arbeitszeit
     self.last_reset_day = -1
     self.stopped = false
     self.paused_at = nil
+    self.pause_min = store.get("pause")           # als Einstellung abgelegt, damit auch das Stream Deck ohne MQTT drankommt
     self.h_str = nil
     self.mm_str = nil
     # MQTT optional: ohne Broker wirkungslos, mit Schalter aus wird nichts gesendet
@@ -82,17 +84,30 @@ class Arbeitszeit
       self.over_min = 0
       self.set_time_strings("0", "00")
     elif !self.stopped                # pausiert: eingefroren lassen
-      var brutto = hour() * 60 + minute() - self.start_min
-      if brutto < 0
-        brutto = 0
+      # Anwesenheit seit dem Einstempeln, gedrueckte Pausen noch enthalten
+      var anwesend = hour() * 60 + minute() - self.start_min
+      if anwesend < 0
+        anwesend = 0
       end
-      var pause = 0
-      if brutto >= 8 * 60
-        pause = 45                    # 30 Min ab 6h + 15 Min zusaetzlich ab 8h
-      elif brutto >= 6 * 60
-        pause = 30
+      # Gedrueckte Pausen zaehlen auf die gesetzliche an, statt zusaetzlich zu
+      # kosten: abgezogen wird die kleinste Dauer, die sowohl die gedrueckte Pause
+      # abdeckt als auch die Pflicht fuer die dabei herauskommende Arbeitszeit.
+      # Liegt die Anwesenheit nur knapp ueber einer Schwelle, reicht dafuer weniger
+      # als die volle Pause - die Arbeitszeit wird dann auf die Schwelle gedeckelt.
+      var abzug = self.pause_min
+      if anwesend - abzug > 6 * 60 && abzug < 30
+        abzug = min(30, anwesend - 6 * 60)
+        if abzug < self.pause_min
+          abzug = self.pause_min
+        end
       end
-      self.netto = brutto - pause
+      if anwesend - abzug > 9 * 60 && abzug < 45
+        abzug = min(45, anwesend - 9 * 60)
+        if abzug < self.pause_min
+          abzug = self.pause_min
+        end
+      end
+      self.netto = anwesend - abzug
       if self.netto < 0
         self.netto = 0
       end
@@ -139,6 +154,7 @@ class Arbeitszeit
       self.configured = true
       self.stopped = false
       self.paused_at = nil
+      self.pause_min = 0
       self.fanfare_done = false
     elif cmd == "pause" && self.configured && !self.stopped
       self.stopped = true
@@ -148,7 +164,7 @@ class Arbeitszeit
       if pause_len < 0
         pause_len = 0
       end
-      self.start_min += pause_len                   # Pause herausrechnen statt neu einzustempeln
+      self.pause_min += pause_len                   # aufaddieren; der Arbeitsbeginn bleibt stehen
       self.stopped = false
       self.paused_at = nil
     elif cmd == "reset" && self.configured
@@ -159,16 +175,21 @@ class Arbeitszeit
       self.fanfare_done = false
       self.stopped = false
       self.paused_at = nil
+      self.pause_min = 0
     elif cmd != "state"
       return
     end
-    if cmd == "clock_in" || cmd == "resume"
+    if cmd == "clock_in"
       # start_min als "SS:MM" zurueck in die Einstellungen schreiben
       var hh = self.start_min / 60
       var mi = self.start_min % 60
       store.set("start", (hh < 10 ? "0" + str(hh) : str(hh)) + ":" + (mi < 10 ? "0" + str(mi) : str(mi)))
+      store.set("pause", 0)
+    elif cmd == "resume"
+      store.set("pause", self.pause_min)
     elif cmd == "reset"
       store.set("start", "")
+      store.set("pause", 0)
     end
     self.publish_state()
   end
@@ -178,10 +199,12 @@ class Arbeitszeit
     if !self.mqtt_on return end
     var s = self.configured ? str(self.start_min) : "null"
     var p = (self.configured && self.stopped) ? "true" : "false"
-    var pm = (self.configured && self.stopped && self.paused_at != nil) ? str(self.paused_at) : "0"
+    var pa = (self.configured && self.stopped && self.paused_at != nil) ? str(self.paused_at) : "0"
+    var pm = self.configured ? str(self.pause_min) : "0"
     var n = self.netto != nil ? str(self.netto) : "0"
     mqtt.publish(self.topic + "/state",
-      "{\"start_min\":" + s + ",\"paused\":" + p + ",\"pause_min\":" + pm + ",\"net_min\":" + n + "}")
+      "{\"start_min\":" + s + ",\"paused\":" + p + ",\"paused_at\":" + pa +
+      ",\"pause_min\":" + pm + ",\"net_min\":" + n + "}")
     self.last_pub = hour() * 60 + minute()
   end
 

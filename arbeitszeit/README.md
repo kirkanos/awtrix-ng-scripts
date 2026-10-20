@@ -20,6 +20,9 @@ zählt aber nicht mehr weiter. Ein dritter Druck setzt die Zeiterfassung fort ("
 Pausendauer wird herausgerechnet, die Anzeige macht also genau dort weiter, wo sie eingefroren war,
 statt bei 0 neu zu beginnen. Beliebig oft wiederholbar (z. B. für die Mittagspause).
 
+Gedrückte Pausen werden dabei **gegen die gesetzliche Pause gerechnet**, nicht zusätzlich abgezogen
+— siehe unten.
+
 Bei Erreichen der maximalen Arbeitszeit ertönt einmalig eine Fanfare samt Benachrichtigung
 "Feierabend!". Nachts um 0 Uhr wird der Arbeitsbeginn automatisch zurückgesetzt (leer), damit am
 nächsten Morgen wieder neu gestartet werden kann (per Knopf oder Einstellung).
@@ -33,10 +36,11 @@ und kann ein-, aus- und weiterstempeln; das Panel bleibt die Wahrheit, der Knopf
 funktioniert unverändert.
 
 - `<Topic>/state` (Standard `awtrix/arbeitszeit/state`): JSON
-  `{"start_min":452,"paused":false,"pause_min":0,"net_min":123}` — `start_min` ist der
-  Arbeitsbeginn als Minute des Tages (`null` ohne Arbeitsbeginn), `paused` ob die Zeit eingefroren
-  ist, `pause_min` die Minute des Tages, in der die Pause begann (`0` sonst), `net_min` die
-  angezeigte Nettozeit. Gesendet bei jeder Änderung, einmal pro Minute und auf den Befehl `state`.
+  `{"start_min":452,"paused":false,"paused_at":0,"pause_min":0,"net_min":123}` — `start_min` ist
+  der Arbeitsbeginn als Minute des Tages (`null` ohne Arbeitsbeginn), `paused` ob die Zeit
+  eingefroren ist, `paused_at` die Minute des Tages, in der die laufende Pause begann (`0` sonst),
+  `pause_min` die **Summe** der heute gedrückten Pausenminuten, `net_min` die angezeigte
+  Nettozeit. Gesendet bei jeder Änderung, einmal pro Minute und auf den Befehl `state`.
 - `<Topic>/cmd`: Klartext-Befehle `clock_in`, `pause`, `resume`, `reset`, `state` — genau wie der
   Select-Knopf; unpassende Befehle (z. B. `pause` ohne laufende Zeit) werden ignoriert.
 
@@ -49,8 +53,32 @@ mosquitto_pub -h <broker> -t 'awtrix/arbeitszeit/cmd' -m state
 
 ## Pausenregel
 
-- Ab 6 Stunden Bruttozeit werden 30 Minuten Pause von der geleisteten Zeit abgezogen.
-- Ab 8 Stunden Bruttozeit werden zusätzlich 15 Minuten abgezogen (45 Minuten insgesamt).
+Grundlage ist die **Anwesenheit** — die Zeit seit dem Einstempeln, gedrückte Pausen eingeschlossen.
+Davon abgezogen wird die kürzeste Dauer, die zweierlei erfüllt: sie deckt die selbst gedrückte
+Pause ab, *und* sie genügt der gesetzlichen Pflicht für die Arbeitszeit, die dabei herauskommt
+(über 6 Stunden: 30 Minuten, über 9 Stunden: 45 Minuten).
+
+Gedrückte Pausen zählen damit **auf die gesetzliche an, statt zusätzlich zu kosten**. Wer 35
+Minuten Pause drückt, verliert nicht 35 Minuten *obendrauf* — die 35 decken die geschuldeten 30
+ab, nur die 5 Minuten Differenz kosten Zeit. Erst eine Pause über der gesetzlichen Dauer kostet
+die Zeit darüber.
+
+Liegt die Anwesenheit nur knapp über einer Schwelle, reicht weniger als die volle Pause: die
+Arbeitszeit wird dann auf die Schwelle gedeckelt, statt darunter zu fallen. 6:30 Anwesenheit ohne
+gedrückte Pause ergeben also 6:00, nicht 6:00 minus weitere 30 Minuten.
+
+| Anwesenheit | gedrückt | Abzug | Arbeitszeit |
+| --- | --- | --- | --- |
+| 6:00 | 0 | 0 | 6:00 |
+| 6:30 | 0 | 30 | 6:00 |
+| 9:00 | 0 | 30 | 8:30 |
+| 9:00 | 35 | 35 | 8:25 |
+| 10:00 | 0 | 45 | 9:15 |
+| 10:00 | 35 | 45 | 9:15 |
+| 10:00 | 60 | 60 | 9:00 |
+
+So formuliert ist das Ergebnis immer zulässig, immer die größtmögliche zulässige Arbeitszeit, und
+eine längere Pause ergibt nie mehr Arbeitszeit als eine kürzere.
 
 ## Install
 
@@ -73,6 +101,7 @@ curl -sX PUT "http://$AWTRIX/api/v1/apps/script/arbeitszeit" \
 | --- | --- | --- |
 | Arbeitsbeginn | Startzeit, Format `SS:MM` (z. B. `08:30`) | leer |
 | Sollstunden | Regelarbeitszeit in Stunden | `8` |
+| Gedrückte Pause | Summe der heute gedrückten Pausen in Minuten; wird gegen die gesetzliche gerechnet. Steht hier, damit sie einen Neustart übersteht und das Stream Deck auch ohne MQTT drankommt — von Hand korrigierbar | `0` |
 | Farbe | Textfarbe, solange keine Überstunden anfallen | Grün `#00CC44` |
 | Farbe Ueberstunden | Textfarbe für Überstunden | Orange `#FF8800` |
 | Icon (unter Sollzeit) | LaMetric-Icon-ID, solange die Sollzeit noch nicht erreicht ist | `5582` |
