@@ -8,6 +8,18 @@ Rotation aus.
   Terminal-Text ("noch am Arbeiten") — lässt sich per Icon-ID durch ein LaMetric-Icon ersetzen.
 - Im Urlaub: LaMetric-Icon (Standard-ID `15644`), konfigurierbar.
 
+## Panelgröße
+
+Die App bringt **zwei eigene Layouts** mit und wählt nach `height()` aus:
+
+- **32×8** (Ulanzi TC001): Icon links, Tagezahl in der kleinen Schrift auf Grundlinie 6.
+- **52×16** (Ulanzi TC002) — `draw_gross()`: 16×16-Icon links, Textspalte ab x=17. Die Tagezahl
+  steht in einer 3×5-Pixelschrift, pixelweise verdoppelt; das „T" ist der Tabelle hinzugefügt.
+
+Aufteilung und Schrifttabelle sind von den mitgelieferten TC002-Apps übernommen. Die Icons der
+TC002 sind 16×16 statt 8×8 — auf dem neuen Panel liegen deshalb andere Icon-Dateien unter
+denselben IDs.
+
 ## Install
 
 1. Open the AWTRIX web interface (device IP, or `http://awtrixng-xxxxxx.local`).

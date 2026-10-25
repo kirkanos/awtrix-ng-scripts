@@ -51,6 +51,24 @@ mosquitto_sub -h <broker> -t 'awtrix/arbeitszeit/state' -v
 mosquitto_pub -h <broker> -t 'awtrix/arbeitszeit/cmd' -m state
 ```
 
+## Panelgröße
+
+Die App bringt **zwei eigene Layouts** mit und wählt nach `height()` aus — keine skalierte Fassung
+desselben Entwurfs, sondern zwei Entwürfe für zwei sehr verschiedene Flächen:
+
+- **32×8** (Ulanzi TC001) — `draw_klein()`: Icon links, Zeit in der kleinen Schrift auf Grundlinie 6,
+  einzeiliger Balken in der untersten Zeile. Hier zählt jeder Pixel.
+- **52×16** (Ulanzi TC002) — `draw_gross()`: 16×16-Icon links, Textspalte ab x=17, dreizeiliger
+  Balken. Die Zeit steht in einer 3×5-Pixelschrift, pixelweise verdoppelt (6×10 je Zeichen).
+
+Das Panel-Aufteilung und die Schrifttabelle sind von den mitgelieferten TC002-Apps übernommen,
+damit die App sich zwischen ihnen nicht fremd anfühlt. Die `large`-Schrift der API wäre nur
+7 der 16 Zeilen hoch, und die Icons der TC002 sind 16×16 statt 8×8 — auf dem neuen Panel liegen
+deshalb andere Icon-Dateien unter denselben IDs.
+
+Die Logik — Pausenregel, MQTT, Einstellungen — ist davon unberührt und existiert nur einmal. Ein
+Fix an der Pausenrechnung gilt damit automatisch für beide Uhren.
+
 ## Pausenregel
 
 Grundlage ist die **Anwesenheit** — die Zeit seit dem Einstempeln, gedrückte Pausen eingeschlossen.

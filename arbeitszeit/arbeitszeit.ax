@@ -1,7 +1,7 @@
 # @name      Arbeitszeit
 # @desc      Geleistete Arbeitszeit inkl. Pausenabzug; Icon wechselt bei Ueberstunden
 # @author    kirkanos
-# @version   1.2
+# @version   1.5
 # @config    start      text   "Arbeitsbeginn"           default="" help="Format: SS:MM"
 # @config    soll       number "Sollstunden"             default=8 min=1 max=12 unit=h
 # @config    pause      number "Gedrueckte Pause"        default=0 min=0 max=480 unit=min help="Summe der heute gedrueckten Pausen; wird gegen die gesetzliche gerechnet"
@@ -20,7 +20,7 @@ class Arbeitszeit
   var start_min, soll_min, total_min, max_min, configured
   var farbe, ueberzeit, icon_unter, icon_ueber, track
   var netto, over_min, fanfare_done, last_reset_day, stopped, paused_at, pause_min
-  var h_str, mm_str, text_x, colon_x, mm_x
+  var h_str, mm_str, font_bits
   var mqtt_on, topic, last_pub
 
   def init()
@@ -43,6 +43,10 @@ class Arbeitszeit
     self.pause_min = store.get("pause")           # als Einstellung abgelegt, damit auch das Stream Deck ohne MQTT drankommt
     self.h_str = nil
     self.mm_str = nil
+    # 3x5-Pixelschrift, je Zeile 3 Bit von oben - dieselbe Tabelle, mit der auch
+    # die mitgelieferten Apps der TC002 ihre grossen Ziffern zeichnen.
+    self.font_bits = {"0": 31599, "1": 11415, "2": 29671, "3": 29647, "4": 23497,
+                      "5": 31183, "6": 31215, "7": 29330, "8": 31727, "9": 31695}
     # MQTT optional: ohne Broker wirkungslos, mit Schalter aus wird nichts gesendet
     self.mqtt_on = store.get("mqtt")
     self.topic = store.get("topic")
@@ -82,7 +86,8 @@ class Arbeitszeit
       # Ab 8 Uhr als Erinnerung mit 0:00 zeigen, bis ein Arbeitsbeginn gesetzt wird
       self.netto = 0
       self.over_min = 0
-      self.set_time_strings("0", "00")
+      self.h_str = "0"
+      self.mm_str = "00"
     elif !self.stopped                # pausiert: eingefroren lassen
       # Anwesenheit seit dem Einstempeln, gedrueckte Pausen noch enthalten
       var anwesend = hour() * 60 + minute() - self.start_min
@@ -120,23 +125,13 @@ class Arbeitszeit
         notify({"text": "Feierabend!", "sound": {"rtttl": "fanfare:d=8,o=5,b=140:c,e,g,c6,g,c6,2e6"}})
       end
       var mn = self.netto % 60
-      self.set_time_strings(str(self.netto / 60), mn < 10 ? "0" + str(mn) : str(mn))
+      self.h_str = str(self.netto / 60)
+      self.mm_str = mn < 10 ? "0" + str(mn) : str(mn)
     end
     # Einmal pro Minute melden, damit ein neu verbundener Client den Zustand bekommt
     if self.mqtt_on && hour() * 60 + minute() != self.last_pub
       self.publish_state()
     end
-  end
-
-  # h_str/mm_str setzen und die Textpositionen (inkl. blinkender Doppelpunkt) neu berechnen
-  def set_time_strings(h_str, mm_str)
-    self.h_str = h_str
-    self.mm_str = mm_str
-    var w = width() - 9
-    var full_w = text_ink_width(h_str + ":" + mm_str)
-    self.text_x = 9 + (w - full_w) / 2
-    self.colon_x = self.text_x + text_width(h_str)
-    self.mm_x = self.colon_x + text_width(":")
   end
 
   def on_button(btn)
@@ -222,32 +217,96 @@ class Arbeitszeit
     end
     var col = self.over_min > 0 ? self.ueberzeit : self.farbe
     var ic = self.over_min > 0 ? self.icon_ueber : self.icon_unter
+    # Die beiden Panels bekommen eigene Layouts statt einer skalierten Fassung:
+    # 32x8 ist auf jeden Pixel angewiesen, 52x16 hat Platz fuer grosse Ziffern.
+    if height() >= 16
+      self.draw_gross(col, ic)
+    else
+      self.draw_klein(col, ic)
+    end
+  end
+
+  # TC001, 32x8: Icon links, Zeit in der kleinen Schrift, einzeiliger Balken.
+  def draw_klein(col, ic)
     if !icon(ic, 0, 0)
       rect_fill(0, 0, 8, 8, 0x222222)
     end
-
     var w = width() - 9
     if self.h_str != nil
-      text(self.text_x, 6, self.h_str, col)
-      # Doppelpunkt blinkt nur, solange die Zeit laeuft
-      var laeuft = self.configured && !self.stopped
-      if !laeuft || (now_ms() / 500) % 2 == 0
-        text(self.colon_x, 6, ":", col)
+      var wh = text_width(self.h_str)
+      var wc = text_width(":")
+      var x = 9 + (w - (wh + wc + text_width(self.mm_str))) / 2
+      text(x, 6, self.h_str, col)
+      if self.blinkt()
+        text(x + wh, 6, ":", col)
       end
-      text(self.mm_x, 6, self.mm_str, col)
+      text(x + wh + wc, 6, self.mm_str, col)
     end
+    self.balken(9, 7, w, 1)
+  end
 
-    # Balken: normale Zeit in Farbe, ab Sollzeit Ueberstunden-Felder in der anderen Farbe
-    rect_fill(9, 7, w, 1, self.track)
+  # TC002, 52x16: 16x16-Icon links, Textspalte ab x=17 - so teilen sich die
+  # mitgelieferten Apps dieses Panel auf. Die Zeit wird in der 3x5-Pixelschrift
+  # gesetzt und pixelweise verdoppelt; die "large"-Schrift waere nur 7 Zeilen hoch.
+  def draw_gross(col, ic)
+    var h = height()
+    var ix = 17
+    if !icon(ic, 0, 0)
+      rect_fill(0, 0, 16, 16, 0x222222)
+    end
+    var avail = width() - ix
+    var bar_h = 3
+    if self.h_str != nil
+      var sc = 2
+      var dw = 3 * sc + 1                       # Vorschub je Ziffer
+      var cw = sc + 2                           # Vorschub Doppelpunkt
+      var nd = size(self.h_str) + size(self.mm_str)
+      var x = ix + (avail - (nd * dw + cw - 1)) / 2
+      var y = (h - bar_h - 1 - 5 * sc) / 2
+      x = self.pixtext(self.h_str, x, y, sc, col)
+      if self.blinkt()
+        rect_fill(x, y + sc, sc, sc, col)
+        rect_fill(x, y + 3 * sc, sc, sc, col)
+      end
+      self.pixtext(self.mm_str, x + cw, y, sc, col)
+    end
+    self.balken(ix, h - bar_h, avail, bar_h)
+  end
+
+  # Pixelschrift vergroessert zeichnen; liefert die x-Position dahinter
+  def pixtext(s, x, y, sc, col)
+    for i : 0 .. size(s) - 1
+      var mask = self.font_bits.find(s[i], 0)
+      for row : 0 .. 4
+        var bits = (mask >> ((4 - row) * 3)) & 7
+        for c : 0 .. 2
+          if bits & (1 << (2 - c))
+            rect_fill(x + c * sc, y + row * sc, sc, sc, col)
+          end
+        end
+      end
+      x += 3 * sc + 1
+    end
+    return x
+  end
+
+  # Doppelpunkt blinkt nur, solange die Zeit laeuft
+  def blinkt()
+    return !(self.configured && !self.stopped) || (now_ms() / 500) % 2 == 0
+  end
+
+  # Balken: normale Zeit in Farbe, ab Sollzeit Ueberstunden in der anderen
+  def balken(x, y, w, bh)
+    rect_fill(x, y, w, bh, self.track)
     var bis_soll = self.netto < self.soll_min ? self.netto : self.soll_min
     var normal_fill = w * bis_soll / self.total_min
     if normal_fill > 0
-      rect_fill(9, 7, normal_fill, 1, self.farbe)
+      rect_fill(x, y, normal_fill, bh, self.farbe)
     end
     if self.over_min > 0
       var ueber_fill = w * clamp(self.over_min, 0, self.total_min - self.soll_min) / self.total_min
       if ueber_fill > 0
-        rect_fill(9 + normal_fill, 7, ueber_fill, 1, self.ueberzeit)
+        rect_fill(x + normal_fill, y, ueber_fill, bh, self.ueberzeit)
       end
     end
   end
