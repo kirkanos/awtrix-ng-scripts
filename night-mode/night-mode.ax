@@ -1,16 +1,17 @@
 # @name    Night Mode
 # @desc    Mutes sound and dims the panel during nightly quiet hours
 # @author  awtrix-ng-scripts
-# @version 1.0
+# @version 1.1
 # @headless true
 # @config  start           text   "Night start (HH:MM)" default="22:00"
 # @config  end             text   "Night end (HH:MM)"   default="07:00"
 # @config  nightBrightness slider "Night brightness"     default=0 min=0 max=255
+# @config  nightVolume     slider "Night volume"         default=0 min=0 max=100
 
 class NightMode
-  var startH, startM, endH, endM, nightBrightness
+  var startH, startM, endH, endM, nightBrightness, nightVolume
   var active
-  var prevBrightness, prevSound, prevAutoBrightness
+  var prevBrightness, prevVolume, prevAutoBrightness
 
   def parse_time(s, dh, dm)
     var m = re.search("([0-9]+):([0-9]+)", s)
@@ -29,9 +30,10 @@ class NightMode
     self.endH = et[0]
     self.endM = et[1]
     self.nightBrightness = store.get("nightBrightness")
+    self.nightVolume = store.get("nightVolume")
     self.active = store.get("active", false)
     self.prevBrightness = store.get("prevBrightness")
-    self.prevSound = store.get("prevSound")
+    self.prevVolume = store.get("prevVolume")
     self.prevAutoBrightness = store.get("prevAutoBrightness")
   end
 
@@ -51,19 +53,22 @@ class NightMode
     var night = self.in_night(hour(), minute())
     if night && !self.active
       self.prevBrightness = settings.get("brightness")
-      self.prevSound = settings.get("soundEnabled")
+      self.prevVolume = settings.get("volume")
       self.prevAutoBrightness = settings.get("autoBrightness")
       store.set("prevBrightness", self.prevBrightness)
-      store.set("prevSound", self.prevSound)
+      store.set("prevVolume", self.prevVolume)
       store.set("prevAutoBrightness", self.prevAutoBrightness)
       settings.set("autoBrightness", false)
       settings.set("brightness", self.nightBrightness)
-      settings.set("soundEnabled", false)
+      # Lautstaerke heisst "volume" (0-100). Das frueher benutzte "soundEnabled"
+      # kennt die Firmware seit 1.2 nicht mehr: settings.set() liefert dafuer
+      # false und aendert nichts - die Stummschaltung lief also ins Leere.
+      settings.set("volume", self.nightVolume)
       self.active = true
       store.set("active", true)
       log("Night Mode: quiet hours started")
     elif !night && self.active
-      settings.set("soundEnabled", self.prevSound == nil ? true : self.prevSound)
+      settings.set("volume", self.prevVolume == nil ? 60 : self.prevVolume)
       settings.set("brightness", self.prevBrightness == nil ? 120 : self.prevBrightness)
       settings.set("autoBrightness", self.prevAutoBrightness == nil ? false : self.prevAutoBrightness)
       self.active = false

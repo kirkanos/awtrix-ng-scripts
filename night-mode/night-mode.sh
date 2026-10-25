@@ -38,6 +38,15 @@ api_patch() {
   echo
 }
 
+# Lautstaerke heisst "volume" (0-100). Das frueher benutzte "soundEnabled" kennt
+# die Firmware seit 1.2 nicht mehr und weist den Request mit 422 ab.
+VOL_STATE="${AWTRIX_VOL_STATE:-$SCRIPT_DIR/.volume-$AWTRIX_HOST}"
+
+current_volume() {
+  curl -sS "${AUTH_ARGS[@]}" "${BASE_URL}/settings" \
+    | sed -E 's/.*"volume":([0-9]+).*/\1/' | head -1
+}
+
 usage() {
   echo "Usage: $(basename "$0") {off|on|status}" >&2
   exit 1
@@ -46,13 +55,27 @@ usage() {
 case "${1:-}" in
   off)
     echo "[$(date '+%F %T')] ${AWTRIX_HOST}: display + sound off"
+    # Lautstaerke vorher merken, damit "on" sie wiederherstellen kann
+    vol="$(current_volume)"
+    case "$vol" in
+      ''|*[!0-9]*) ;;
+      0) ;;                      # schon stumm - nicht die 0 als "vorher" merken
+      *) printf '%s\n' "$vol" > "$VOL_STATE" ;;
+    esac
     api_patch "/display" '{"power":false}'
-    api_patch "/settings" '{"soundEnabled":false}'
+    api_patch "/settings" "{\"volume\":${AWTRIX_NIGHT_VOLUME:-0}}"
     ;;
   on)
     echo "[$(date '+%F %T')] ${AWTRIX_HOST}: display + sound on"
+    vol="${AWTRIX_DAY_VOLUME:-}"
+    if [ -z "$vol" ] && [ -f "$VOL_STATE" ]; then
+      vol="$(cat "$VOL_STATE")"
+    fi
+    case "$vol" in
+      ''|*[!0-9]*) vol=60 ;;     # nichts gemerkt und nichts gesetzt
+    esac
     api_patch "/display" '{"power":true}'
-    api_patch "/settings" '{"soundEnabled":true}'
+    api_patch "/settings" "{\"volume\":${vol}}"
     ;;
   status)
     curl -sS "${AUTH_ARGS[@]}" "${BASE_URL}/display"

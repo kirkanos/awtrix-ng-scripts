@@ -14,6 +14,10 @@ whichever fits your setup, or run both — they don't conflict since they touch 
 Calls the device's REST API (`PATCH /api/v1/display` for real power off, `PATCH /api/v1/settings`
 for sound) from a machine on the same network. Requires only `curl`.
 
+`off` remembers the current volume in `.volume-<host>` next to the script and restores it on `on`.
+`AWTRIX_NIGHT_VOLUME` (default `0`) and `AWTRIX_DAY_VOLUME` (overrides the remembered value) let
+you set both ends explicitly.
+
 ### Setup
 
 ```sh
@@ -81,8 +85,13 @@ curl -sX PUT "http://$AWTRIX/api/v1/apps/script/night-mode" \
 | Night start (HH:MM) | when quiet hours begin | `22:00` |
 | Night end (HH:MM) | when quiet hours end | `07:00` |
 | Night brightness | panel brightness during quiet hours (`0` = effectively off) | `0` |
+| Night volume | device volume during quiet hours (`0` = silent) | `0` |
 
 Saving restarts the app and re-reads these values.
+
+> **Firmware 1.2:** the volume setting is `volume` (0–100). The older `soundEnabled` switch is
+> gone — `settings.set("soundEnabled", …)` simply returns `false` and changes nothing, so on 1.2
+> the app dimmed the panel but never actually muted anything. Fixed since version 1.1 of the app.
 
 ### Limitation vs. Option A
 
